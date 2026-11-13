@@ -1,0 +1,88 @@
+name: Bangun Titik.exe (Windows)
+
+# Jalankan manual dari tab Actions, atau otomatis saat mendorong tag v*
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build di Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Ambil kode
+        uses: actions/checkout@v4
+
+      - name: Siapkan Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Pasang PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller
+
+      # Dukungan iOS bersifat opsional. Kalau paketnya gagal dipasang,
+      # build tetap lanjut dan exe-nya tetap berguna untuk backend
+      # mock, feed, dan adb.
+      - name: Pasang dukungan iOS (opsional)
+        continue-on-error: true
+        run: python -m pip install pymobiledevice3
+
+      - name: Jalankan uji
+        run: python -m unittest discover -s tests -v
+
+      - name: Bangun exe
+        shell: pwsh
+        run: |
+          $pyi = @(
+            '--onefile'
+            '--name', 'Titik'
+            '--icon', 'windows/titik.ico'
+            '--version-file', 'windows/version_info.txt'
+            '--add-data', 'titik/web;titik/web'
+            '--console'
+            '--noconfirm'
+            '--clean'
+          )
+
+          # Sertakan pymobiledevice3 hanya kalau benar-benar terpasang.
+          # Probe ini selalu keluar dengan kode 0: di PowerShell 7.4+ sebuah
+          # perintah native yang gagal akan melempar error dan mematikan
+          # langkah ini, padahal "tidak terpasang" justru kasus yang ingin
+          # kita tangani dengan anggun.
+          $probe = python -c "import importlib.util as u; print('YES' if u.find_spec('pymobiledevice3') else 'NO')"
+          if ($probe -eq 'YES') {
+            Write-Host "pymobiledevice3 ada - dukungan iOS disertakan"
+            $pyi += '--collect-all=pymobiledevice3'
+          } else {
+            Write-Host "pymobiledevice3 tidak ada - exe dibangun tanpa dukungan iOS"
+          }
+
+          $pyi += 'run_titik.py'
+          pyinstaller @pyi
+
+      - name: Uji exe yang terbangun
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'dist/Titik.exe')) {
+            throw 'Build selesai tetapi dist/Titik.exe tidak ada.'
+          }
+          $size = [math]::Round((Get-Item 'dist/Titik.exe').Length / 1MB, 1)
+          Write-Host "Titik.exe terbangun: $size MB"
+          ./dist/Titik.exe --version
+
+      - name: Unggah hasilnya
+        uses: actions/upload-artifact@v4
+        with:
+          name: Titik-windows-x64
+          path: dist/Titik.exe
+          if-no-files-found: error
+          retention-days: 30
