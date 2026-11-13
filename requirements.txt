@@ -1,0 +1,5 @@
+# Titik hanya punya satu dependensi, dan itu pun hanya dibutuhkan saat
+# Anda benar-benar menyentuh perangkat. Mode --backend mock berjalan
+# dengan pustaka standar Python saja.
+
+pymobiledevice3>=11.0

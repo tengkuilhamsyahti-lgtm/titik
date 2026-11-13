@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Titik — Pengubah Lokasi</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="app">
+
+  <aside id="sidebar">
+    <div class="brand">
+      <svg viewBox="0 0 48 48" aria-hidden="true">
+        <defs>
+          <linearGradient id="bg1" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#22D3EE"/><stop offset="100%" stop-color="#818CF8"/>
+          </linearGradient>
+        </defs>
+        <g fill="none" stroke="url(#bg1)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M24 5 C17.4 5 12 10.4 12 17 c0 8.5 12 18 12 18 s12-9.5 12-18 c0-6.6-5.4-12-12-12 z"/>
+          <path d="M15.5 38.5 Q24 42.8 32.5 38.5" stroke-width="2.6" opacity="0.7"/>
+          <path d="M9.5 41.5 Q24 47.5 38.5 41.5" stroke-width="2.4" opacity="0.35"/>
+        </g>
+        <circle cx="24" cy="17" r="4.4" fill="url(#bg1)"/>
+      </svg>
+      <div>
+        <div class="brand-name">titik</div>
+        <div class="brand-sub">pengubah lokasi GPS</div>
+      </div>
+    </div>
+
+    <div class="device">
+      <div class="device-top">
+        <span class="dot" id="devDot"></span>
+        <div style="flex:1;min-width:0">
+          <div class="device-name" id="devName">Menyambung…</div>
+          <div class="device-meta" id="devMeta">—</div>
+        </div>
+      </div>
+      <div class="device-note" id="devNote" hidden></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab on" data-pane="teleport">Teleport</button>
+      <button class="tab" data-pane="rute">Rute</button>
+      <button class="tab" data-pane="stick">Joystick</button>
+      <button class="tab" data-pane="fav">Favorit</button>
+    </div>
+
+    <div class="panes">
+
+      <!-- ------------------------------------------------ Teleport -->
+      <section class="pane on" id="pane-teleport">
+        <div class="field">
+          <label class="lbl" for="coordIn">Koordinat atau tautan peta</label>
+          <input type="text" id="coordIn" placeholder="-6.2088, 106.8456" autocomplete="off">
+          <p class="hint">Tempel juga bisa: tautan Google Maps yang memuat <code>@lat,lon</code>.</p>
+        </div>
+        <div class="row">
+          <button class="btn primary" id="btnTeleport">Pindahkan</button>
+          <button class="btn" id="btnSavePlace">Simpan</button>
+        </div>
+        <p class="hint">Atau klik langsung di peta untuk memilih titik.</p>
+
+        <hr class="sep">
+        <h3 class="sec">Kendali</h3>
+        <button class="btn danger wide" id="btnStop">Hentikan &amp; kembalikan GPS asli</button>
+
+        <hr class="sep">
+        <h3 class="sec">Realisme</h3>
+        <div class="field">
+          <label class="lbl">Interval kirim <span class="range-val" id="pushVal">1.0 d</span></label>
+          <input type="range" id="pushRange" min="0.25" max="5" step="0.25" value="1">
+          <p class="hint">GPS sungguhan memperbarui sekitar sekali per detik.</p>
+        </div>
+        <div class="field">
+          <label class="lbl">Derau posisi <span class="range-val" id="jitVal">0 m</span></label>
+          <input type="range" id="jitRange" min="0" max="20" step="1" value="0">
+          <p class="hint">Menggeser titik secara acak tiap pengiriman, meniru ketidakpresisian GPS.</p>
+        </div>
+      </section>
+
+      <!-- ---------------------------------------------------- Rute -->
+      <section class="pane" id="pane-rute">
+        <p class="hint" style="margin-top:0">Klik di peta untuk menambah titik jalur. Minimal dua titik.</p>
+        <ul class="wp-list" id="wpList"></ul>
+        <div class="row" style="margin-bottom:13px">
+          <button class="btn" id="btnClearWp">Kosongkan</button>
+          <button class="btn" id="btnUndoWp">Hapus terakhir</button>
+        </div>
+
+        <div class="field">
+          <label class="lbl">Kecepatan <span class="range-val" id="spdVal">5 km/j</span></label>
+          <input type="range" id="spdRange" min="1" max="120" step="1" value="5">
+          <p class="hint">Jalan kaki 5 · lari 12 · sepeda 20 · mobil kota 40</p>
+        </div>
+
+        <div class="field">
+          <label class="lbl" for="loopSel">Saat tiba di ujung</label>
+          <select id="loopSel">
+            <option value="once">Berhenti</option>
+            <option value="repeat">Ulang dari awal</option>
+            <option value="pingpong">Bolak-balik</option>
+          </select>
+        </div>
+
+        <div class="row" style="margin-bottom:9px">
+          <button class="btn primary" id="btnRouteStart">Mulai</button>
+          <button class="btn" id="btnRoutePause">Jeda</button>
+        </div>
+        <button class="btn wide" id="btnSaveRoute">Simpan rute ke favorit</button>
+
+        <hr class="sep">
+        <h3 class="sec">GPX</h3>
+        <div class="field">
+          <label class="lbl" for="gpxFlavor">Format ekspor</label>
+          <select id="gpxFlavor">
+            <option value="track">Baku (trkpt) — aplikasi peta dan olahraga</option>
+            <option value="xcode">Xcode (wpt + waktu) — simulasi lokasi</option>
+          </select>
+          <p class="hint" id="gpxHint">Bentuk GPX yang dipahami hampir semua aplikasi.</p>
+        </div>
+        <div class="row" style="margin-bottom:9px">
+          <button class="btn" id="btnGpxImport">Impor berkas</button>
+          <button class="btn" id="btnGpxExport">Ekspor</button>
+        </div>
+        <input type="file" id="gpxFile" accept=".gpx,application/gpx+xml,text/xml" hidden>
+      </section>
+
+      <!-- ------------------------------------------------ Joystick -->
+      <section class="pane" id="pane-stick">
+        <p class="hint" style="margin-top:0">
+          Seret tombol untuk bergerak. Jauh dari pusat berarti lebih cepat.
+          Tentukan posisi awal lewat Teleport dulu.
+        </p>
+        <div class="stick-wrap">
+          <div class="stick" id="stick">
+            <div class="stick-ring"></div>
+            <div class="compass"><span class="n">U</span><span class="e">T</span><span class="s">S</span><span class="w">B</span></div>
+            <div class="knob" id="knob">0</div>
+          </div>
+        </div>
+        <div class="field">
+          <label class="lbl">Kecepatan maksimum <span class="range-val" id="stickMaxVal">12 km/j</span></label>
+          <input type="range" id="stickMax" min="1" max="120" step="1" value="12">
+        </div>
+        <button class="btn wide" id="btnStickStop">Berhenti bergerak</button>
+      </section>
+
+      <!-- -------------------------------------------------- Favorit -->
+      <section class="pane" id="pane-fav">
+        <h3 class="sec">Tempat</h3>
+        <div id="favPlaces"></div>
+        <hr class="sep">
+        <h3 class="sec">Rute</h3>
+        <div id="favRoutes"></div>
+        <hr class="sep">
+        <h3 class="sec">Riwayat</h3>
+        <div id="histList"></div>
+      </section>
+
+    </div>
+  </aside>
+
+  <main id="main">
+    <div class="progress"><i id="progBar"></i></div>
+    <div id="map"></div>
+    <div id="toasts"></div>
+    <div class="statusbar">
+      <div><div class="stat-k">Mode</div><div class="stat-v mode" id="stMode">—</div></div>
+      <div><div class="stat-k">Posisi</div><div class="stat-v" id="stPos">—</div></div>
+      <div><div class="stat-k">Jalur</div><div class="stat-v" id="stProg">—</div></div>
+      <div><div class="stat-k">Terkirim</div><div class="stat-v" id="stPush">0</div></div>
+    </div>
+  </main>
+
+</div>
+
+<script>window.TITIK_TOKEN = "__TITIK_TOKEN__";</script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
